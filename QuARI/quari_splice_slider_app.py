@@ -511,7 +511,7 @@ def api_search_quari_splice():
     concept_weights = data.get('concept_weights', {})
     k = min(int(data.get('k', 10)), 20)
     use_symmetric = data.get('use_symmetric', True)
-    alpha = float(data.get('alpha', 0.5))
+    alpha = float(data.get('alpha', 1))
     optimization_steps = int(data.get('optimization_steps', 10))
     lr = float(data.get('lr', 0.01))
     
