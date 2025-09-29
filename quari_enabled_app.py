@@ -58,8 +58,7 @@ print(f"✅ Gallery paths: {len(gallery_paths)} images")
 # Precompute normalized embeddings for fast search
 if PRECOMPUTE_NORMS:
     gallery_norms = gallery_embeddings / np.linalg.norm(gallery_embeddings, axis=1, keepdims=True)
-    vocab_norms = vocab_embeddings / np.linalg.norm(vocab_embeddings, axis=1, keepdims=True)
-    print("✅ Precomputed normalized embeddings")
+    print("✅ Precomputed normalized gallery embeddings")
 
 # Load queries (subset for performance)
 queries_dir = base_dir / "data" / "queries"
@@ -112,7 +111,9 @@ def init_fast_components():
         
         # Fast SPLICE with reduced vocabulary
         image_mean = np.mean(gallery_embeddings, axis=0).astype(np.float32)
-        dictionary = torch.tensor(vocab_embeddings, dtype=torch.float32, device=device)
+        # Normalize vocabulary embeddings for consistent SPLICE decomposition
+        vocab_embeddings_norm = vocab_embeddings / np.linalg.norm(vocab_embeddings, axis=1, keepdims=True)
+        dictionary = torch.tensor(vocab_embeddings_norm, dtype=torch.float32, device=device)
         mean_tensor = torch.tensor(image_mean, dtype=torch.float32, device=device)
         
         splice = SPLICE(image_mean=mean_tensor, dictionary=dictionary, l1_penalty=0.01, device=device)  # Higher penalty for sparsity
@@ -465,7 +466,9 @@ class FastHandler(http.server.SimpleHTTPRequestHandler):
             
             # Fast SPLICE decomposition (reduced vocabulary)
             splice_start = time.time()
-            query_tensor = torch.tensor(query_emb, dtype=torch.float32).unsqueeze(0).to(splice_model.device)
+            # Ensure query embedding is properly normalized for SPLICE
+            query_emb_norm = query_emb / np.linalg.norm(query_emb)
+            query_tensor = torch.tensor(query_emb_norm, dtype=torch.float32).unsqueeze(0).to(splice_model.device)
             weights = splice_model.decompose(query_tensor)
             weights_np = weights.detach().cpu().numpy().flatten()
             splice_time = (time.time() - splice_start) * 1000
@@ -485,12 +488,10 @@ class FastHandler(http.server.SimpleHTTPRequestHandler):
             # Fast search using precomputed norms
             search_start = time.time()
             if PRECOMPUTE_NORMS:
-                query_norm = query_emb / np.linalg.norm(query_emb)
-                similarities = np.dot(gallery_norms, query_norm)
+                similarities = np.dot(gallery_norms, query_emb_norm)
             else:
                 gallery_norms_local = gallery_embeddings / np.linalg.norm(gallery_embeddings, axis=1, keepdims=True)
-                query_norm = query_emb / np.linalg.norm(query_emb)
-                similarities = np.dot(gallery_norms_local, query_norm)
+                similarities = np.dot(gallery_norms_local, query_emb_norm)
             
             top_indices = np.argsort(similarities)[::-1][:k]
             search_time = (time.time() - search_start) * 1000
@@ -576,6 +577,7 @@ class FastHandler(http.server.SimpleHTTPRequestHandler):
             
             # Fast search with precomputed norms
             search_start = time.time()
+            # Ensure final embedding is properly normalized
             final_norm = final_emb / np.linalg.norm(final_emb)
             
             if PRECOMPUTE_NORMS:

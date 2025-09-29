@@ -88,8 +88,8 @@ class SPLICE(nn.Module):
             A {batch x CLIP dimensionality} tensor of dense reconstructions.
         """
         recon_text = weights@self.dictionary
+        recon_text = recon_text + self.text_mean
         recon_text = torch.nn.functional.normalize(recon_text, dim=1)
-        recon_text = torch.nn.functional.normalize(recon_text + self.text_mean, dim=1)
         return recon_text
 
     def recompose_image(self, weights):
@@ -106,8 +106,8 @@ class SPLICE(nn.Module):
             A {batch x CLIP dimensionality} tensor of dense reconstructions.
         """
         recon_image = weights@self.dictionary
+        recon_image = recon_image + self.image_mean
         recon_image = torch.nn.functional.normalize(recon_image, dim=1)
-        recon_image = torch.nn.functional.normalize(recon_image + self.image_mean, dim=1)
         return recon_image
 
     def forward(self, image, text):
