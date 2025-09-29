@@ -21,6 +21,8 @@ wheels/
 *.egg
 MANIFEST
 *.md
+*npy
+*.json
 
 # PyTorch
 *.pth
