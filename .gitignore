@@ -27,7 +27,6 @@ MANIFEST
 # PyTorch
 *.pth
 *.ckpt
-# Keep our dummy model
 !checkpoints/last.pt
 
 # Jupyter Notebook
@@ -66,8 +65,6 @@ Thumbs.db
 data/gallery/*
 data/emb_*
 *.npz
-# Keep vocab files
-!vocab/*.npz
 
 # Logs
 *.log
