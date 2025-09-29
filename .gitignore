@@ -94,5 +94,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
+vocab/*.npz
+
 data/
 utils/
