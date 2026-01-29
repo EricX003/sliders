@@ -5,7 +5,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from pathlib import Path
 
-from transformer_hypernetwork import ColumnWiseTransformerHypernetwork
+from transformer_hypernetwork import TransformerHypernetwork
 
 
 class ConceptBottleneckQuARI(nn.Module):
@@ -18,7 +18,7 @@ class ConceptBottleneckQuARI(nn.Module):
     
     def __init__(
         self,
-        hypernetwork: ColumnWiseTransformerHypernetwork,
+        hypernetwork: TransformerHypernetwork,
         vocab_embeddings: torch.Tensor,
         concept_names: List[str],
         concept_projection_dim: int = 256,
@@ -84,8 +84,10 @@ class ConceptBottleneckQuARI(nn.Module):
             return_history=return_all_steps or return_decomposition
         )
         
-        # Final decode
-        W_text, W_img = self.hypernetwork._decode_and_proj(u_tok, v_tok)
+        # Final decode - TransformerHypernetwork only outputs W_image
+        W_img = self.hypernetwork._decode_and_form_matrix(u_tok, v_tok)
+        # Use same matrix for both text and image (hypernetwork generates single transformation)
+        W_text = W_img
         
         output = {
             'W_text': W_text,
@@ -143,12 +145,14 @@ class ConceptBottleneckQuARI(nn.Module):
         v_tok = torch.zeros(B, self.hypernetwork.r, self.hypernetwork.H, device=device)
         
         # Standard denoising steps
+        from transformer_hypernetwork import get_timestep_embedding, scaled_positional_encoding
         for t in range(self.hypernetwork.num_steps):
             step_idx = torch.full((B,), t, device=device, dtype=torch.long)
-            cond = (ctx + self.hypernetwork.step_embedding(step_idx)).unsqueeze(1)
+            step_emb = get_timestep_embedding(step_idx, self.hypernetwork.H)
+            step_emb = self.hypernetwork.step_proj(step_emb)
+            cond = (ctx + step_emb).unsqueeze(1)
             
             # Add positional encoding
-            from transformer_hypernetwork import scaled_positional_encoding
             u_seq = scaled_positional_encoding(u_tok, self.hypernetwork.pos_emb)
             v_seq = scaled_positional_encoding(v_tok, self.hypernetwork.pos_emb)
             
@@ -196,11 +200,14 @@ class ConceptBottleneckQuARI(nn.Module):
         
         history = []
         
-        for step in range(optimization_steps):
-            optimizer.zero_grad()
+        with torch.enable_grad():
+            for step in range(optimization_steps):
+                optimizer.zero_grad()
             
-            # Decode current tokens to get transformation matrices
-            W_text, W_img = self.hypernetwork._decode_and_proj(u_tok, v_tok)
+            # Decode current tokens to get transformation matrix
+            # TransformerHypernetwork only outputs W_image, use it for both
+            W_img = self.hypernetwork._decode_and_form_matrix(u_tok, v_tok)
+            W_text = W_img
             
             # Apply transformations to target concept representation
             # We want the transformed concept to align with the original concept
